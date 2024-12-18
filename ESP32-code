@@ -1,0 +1,57 @@
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+Adafruit_MPU6050 mpu;
+
+const char* ssid = "Y7a";
+const char* password = "Pathum@123";
+const char* scriptUrl = "https://script.google.com/macros/s/AKfycbw13y6XhpnrkXStZNmrYo8NqHzTG8CgNu4kS7u6Ev9H_W8Bhxhw-IIQLDEwQF5rWzBP/exec";
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Connected to WiFi");
+
+  if (!mpu.begin()) {
+    Serial.println("Failed to initialize MPU6050!");
+    while (1);
+  }
+}
+
+void loop() {
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  String jsonPayload = "{";
+  jsonPayload += "\"accelX\":" + String(a.acceleration.x) + ",";
+  jsonPayload += "\"accelY\":" + String(a.acceleration.y) + ",";
+  jsonPayload += "\"accelZ\":" + String(a.acceleration.z) + ",";
+  jsonPayload += "\"gyroX\":" + String(g.gyro.x) + ",";
+  jsonPayload += "\"gyroY\":" + String(g.gyro.y) + ",";
+  jsonPayload += "\"gyroZ\":" + String(g.gyro.z);
+  jsonPayload += "}";
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(scriptUrl);
+    http.addHeader("Content-Type", "application/json");
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0) {
+      Serial.println("Data sent successfully");
+    } else {
+      Serial.println("Error sending data");
+    }
+
+    http.end();
+  }
+
+  delay(1000); // Send data every second
+}
