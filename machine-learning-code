@@ -1,0 +1,109 @@
+import pandas as pd
+from fpdf import FPDF
+import os
+
+# Step 1: Define scoring function
+def calculate_behavior_score(data):
+    """Calculate the score for driver behavior based on sensor data."""
+    score = 0
+    distance_traveled = 0
+    time_taken = 0
+    
+    previous_timestamp = None
+
+    for index, row in data.iterrows():
+        # Parse timestamp
+        timestamp = pd.to_datetime(row[0], format='%d/%m/%Y %H:%M')
+        
+        if previous_timestamp is not None:
+            # Calculate time difference in seconds
+            time_diff = (timestamp - previous_timestamp).total_seconds()
+            time_taken += time_diff
+            
+            # Simple distance calculation based on speed (assuming speed is in km/h)
+            speed = row['Speed'] if 'Speed' in row else 0  # Replace with actual column name if available
+            distance_traveled += (speed / 3600) * time_diff  # Convert speed to km/s
+
+        previous_timestamp = timestamp
+        
+        # Example behavior scoring based on acceleration and gyroscope data
+        aX = row['aX']
+        gX = row['gX']
+        
+        # Mocking behavior based on thresholds
+        if aX < 0:  # Just an example condition
+            driving_style = 'Aggressive'
+        else:
+            driving_style = 'Smooth'  # Default to smooth
+
+        # Behavior scoring
+        if driving_style == 'Smooth':
+            score += 1 / 60  # 1 point per minute
+        elif driving_style == 'Sharp':
+            score -= 2
+        elif driving_style == 'Aggressive':
+            if aX > 1700 and gX < -400:  # Example threshold for hard braking
+                score -= 5 * row.get('Duration', 1)  # Duration in seconds
+            elif aX > 1600 and gX > 400:  # Example threshold for rapid acceleration
+                score -= 3
+
+    return round(score, 2), round(distance_traveled, 2), round(time_taken / 60, 2)  # Time in minutes
+
+# Step 2: Analyze driver behavior
+def analyze_behavior(score):
+    """Analyze the behavior category based on the score."""
+    if score >= 1:
+        return "Positive Score: The driver consistently showcases safe and smooth driving habits."
+    elif -1 >= score >= -9:
+        return "Low Negative Score: The driver demonstrates generally safe driving behavior."
+    elif -10 >= score >= -19:
+        return "Moderate Negative Score: The driver may display occasional instances of aggressive driving."
+    else:
+        return "High Negative Score: Aggressive Driving."
+
+# Step 3: Generate PDF Report
+def generate_report(score, analysis, time, file_name="Driver_Behavior_Report.pdf"):
+    """Generate a PDF report of the driver behavior analysis."""
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font("Arial", 'B', 16)  # Bold and larger font for title
+    pdf.set_text_color(0, 102, 204)  # Set color to a shade of blue
+    pdf.cell(200, 10, txt="Driver Behavior Analysis Report", ln=True, align='C')
+    pdf.ln(10)
+
+    # Reset font for content
+    pdf.set_font("Arial", size=12)
+    pdf.set_text_color(0, 0, 0)  # Reset to black for content
+
+    pdf.cell(200, 10, txt=f"Final Score: {score}", ln=True)
+    pdf.cell(200, 10, txt=f"Analysis: {analysis}", ln=True)
+    pdf.cell(200, 10, txt=f"Time Taken: {time} minutes", ln=True)
+
+    pdf.output(file_name)
+    print(f"Report generated: {file_name}")
+
+# Step 4: Main function to integrate
+def main():
+    # Load sensor data
+    file_name = "data.csv"  # Replace with the actual file path
+
+    if not os.path.exists(file_name):
+        print(f"File {file_name} does not exist.")
+        return
+
+    data = pd.read_csv(file_name, header=None, names=['Timestamp', 'aX', 'aY', 'aZ', 'gX', 'gY', 'gZ'])
+    
+    # Calculate the behavior score, distance, and time taken
+    score, distance, time = calculate_behavior_score(data)
+
+    # Analyze the driver's behavior
+    analysis = analyze_behavior(score)
+
+    # Generate PDF report
+    generate_report(score, analysis, time)
+
+# Run the main function
+if __name__ == "__main__":
+    main()
